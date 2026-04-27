@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>TaskFlow</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <main class="app">
+    <header>
+      <h1>TaskFlow</h1>
+      <p id="counter"></p>
+    </header>
+
+    <div class="input-group">
+      <input type="text" id="taskInput" placeholder="Adicionar nova tarefa...">
+      <button id="addBtn">Adicionar</button>
+    </div>
+
+    <div class="filters">
+      <button data-filter="all" class="active">Todas</button>
+      <button data-filter="active">Ativas</button>
+      <button data-filter="completed">Concluídas</button>
+    </div>
+
+    <ul id="taskList"></ul>
+
+    <p id="emptyState">Nenhuma tarefa ainda 👀</p>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
