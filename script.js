@@ -1,111 +1,153 @@
-const input = document.getElementById("taskInput");
-const addBtn = document.getElementById("addBtn");
-const list = document.getElementById("taskList");
-const counter = document.getElementById("counter");
-const emptyState = document.getElementById("emptyState");
-const filterButtons = document.querySelectorAll(".filters button");
+const input = document.getElementById('taskInput');
+const addBtn = document.getElementById('addBtn');
+const list = document.getElementById('taskList');
+const counter = document.getElementById('counter');
+const emptyState = document.getElementById('emptyState');
+const filterButtons = document.querySelectorAll('.filters button');
+const logoutBtn = document.getElementById('logoutBtn');
 
-let tasks = JSON.parse(localStorage.getItem("tasks")) || [];
-let currentFilter = "all";
+let tasks = [];
+let currentFilter = 'all';
 
-addBtn.addEventListener("click", addTask);
-input.addEventListener("keypress", e => {
-  if (e.key === "Enter") addTask();
-});
+const toast = document.createElement('div');
+toast.className = 'toast';
+document.body.appendChild(toast);
 
-filterButtons.forEach(btn => {
-  btn.addEventListener("click", () => {
-    document.querySelector(".filters .active").classList.remove("active");
-    btn.classList.add("active");
-    currentFilter = btn.dataset.filter;
+const showToast = (message) => {
+  toast.textContent = message;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 3000);
+};
+
+const handleApiError = (err) => {
+  const message = err?.message || 'Erro inesperado no servidor.';
+  showToast(message);
+  if (message.toLowerCase().includes('token')) {
+    Auth.logout();
+  }
+};
+
+const loadTasks = async () => {
+  try {
+    const response = await Auth.fetchWithAuth(`/tasks?status=${currentFilter}`);
+    tasks = response.data.tasks || [];
     render();
-  });
-});
-
-function addTask() {
-  const text = input.value.trim();
-  if (!text) return;
-
-  tasks.push({
-    id: Date.now(),
-    text,
-    completed: false
-  });
-
-  save();
-  input.value = "";
-  input.focus();
-}
-
-function toggleTask(id) {
-  tasks = tasks.map(t =>
-    t.id === id ? { ...t, completed: !t.completed } : t
-  );
-  save();
-}
-
-function removeTask(id) {
-  tasks = tasks.filter(t => t.id !== id);
-  save();
-}
-
-function save() {
-  localStorage.setItem("tasks", JSON.stringify(tasks));
-  render();
-}
-
-function getFilteredTasks() {
-  if (currentFilter === "active") {
-    return tasks.filter(t => !t.completed);
+  } catch (err) {
+    handleApiError(err);
   }
-  if (currentFilter === "completed") {
-    return tasks.filter(t => t.completed);
+};
+
+const addTask = async () => {
+  const title = input.value.trim();
+  if (!title) return;
+
+  addBtn.disabled = true;
+  try {
+    const response = await Auth.fetchWithAuth('/tasks', {
+      method: 'POST',
+      body: { title },
+    });
+    tasks.unshift(response.data.task);
+    input.value = '';
+    input.focus();
+    render();
+    showToast(response.message || 'Tarefa criada com sucesso.');
+  } catch (err) {
+    handleApiError(err);
+  } finally {
+    addBtn.disabled = false;
   }
-  return tasks;
-}
+};
 
-function render() {
-  list.innerHTML = "";
+const toggleTask = async (id) => {
+  try {
+    const response = await Auth.fetchWithAuth(`/tasks/${id}/toggle`, {
+      method: 'PATCH',
+    });
+    tasks = tasks.map(task => task.id === response.data.task.id ? response.data.task : task);
+    render();
+    showToast(response.message || 'Tarefa atualizada.');
+  } catch (err) {
+    handleApiError(err);
+  }
+};
 
-  const filtered = getFilteredTasks();
+const removeTask = async (id) => {
+  if (!confirm('Deseja excluir esta tarefa?')) return;
 
-  filtered.forEach(task => {
-    const li = document.createElement("li");
-    if (task.completed) li.classList.add("completed");
+  try {
+    const response = await Auth.fetchWithAuth(`/tasks/${id}`, {
+      method: 'DELETE',
+    });
+    tasks = tasks.filter(task => task.id !== id);
+    render();
+    showToast(response.message || 'Tarefa excluída com sucesso.');
+  } catch (err) {
+    handleApiError(err);
+  }
+};
 
-    const left = document.createElement("div");
-    left.className = "task-left";
+const render = () => {
+  list.innerHTML = '';
 
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
+  if (tasks.length === 0) {
+    emptyState.style.display = 'block';
+  } else {
+    emptyState.style.display = 'none';
+  }
+
+  tasks.forEach(task => {
+    const li = document.createElement('li');
+    if (task.completed) li.classList.add('completed');
+
+    const left = document.createElement('div');
+    left.className = 'task-left';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
     checkbox.checked = task.completed;
-    checkbox.onclick = () => toggleTask(task.id);
+    checkbox.addEventListener('change', () => toggleTask(task.id));
 
-    const span = document.createElement("span");
-    span.textContent = task.text;
+    const span = document.createElement('span');
+    span.textContent = task.title || '';
 
     left.appendChild(checkbox);
     left.appendChild(span);
 
-    const removeBtn = document.createElement("button");
-    removeBtn.textContent = "×";
-    removeBtn.className = "remove";
-    removeBtn.onclick = () => removeTask(task.id);
+    const removeBtn = document.createElement('button');
+    removeBtn.textContent = '×';
+    removeBtn.className = 'remove';
+    removeBtn.addEventListener('click', () => removeTask(task.id));
 
     li.appendChild(left);
     li.appendChild(removeBtn);
-
     list.appendChild(li);
   });
 
-  updateUI(filtered);
-}
-
-function updateUI(filtered) {
   const remaining = tasks.filter(t => !t.completed).length;
   counter.textContent = `${remaining} tarefa(s) pendente(s)`;
+};
 
-  emptyState.style.display = filtered.length === 0 ? "block" : "none";
-}
+const initialize = () => {
+  if (!Auth.requireLogin()) return;
 
-render();
+  addBtn.addEventListener('click', addTask);
+  input.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') addTask();
+  });
+
+  logoutBtn?.addEventListener('click', Auth.logout);
+
+  filterButtons.forEach(btn => {
+    btn.addEventListener('click', async () => {
+      document.querySelector('.filters .active')?.classList.remove('active');
+      btn.classList.add('active');
+      currentFilter = btn.dataset.filter;
+      await loadTasks();
+    });
+  });
+
+  loadTasks();
+};
+
+initialize();

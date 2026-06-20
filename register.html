@@ -106,7 +106,7 @@
       strengthLabel.style.color = strength.color;
     });
 
-    registerForm.addEventListener('submit', (event) => {
+    registerForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       ['nameError', 'emailError', 'passwordError', 'confirmError', 'termsError'].forEach(id => setError(id, ''));
 
@@ -145,14 +145,13 @@
 
       if (hasError) return;
 
-      const result = Auth.register(name, email, password);
-
+      const result = await Auth.register(name, email, password);
       if (!result.success) {
         Auth.showToast(toast, result.message);
         return;
       }
 
-      Auth.showToast(toast, 'Conta criada com sucesso!');
+      Auth.showToast(toast, result.message || 'Conta criada com sucesso!');
       setTimeout(() => {
         window.location.href = 'login.html';
       }, 1200);

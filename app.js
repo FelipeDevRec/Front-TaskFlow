@@ -1,22 +1,11 @@
 /**
- * app.js — Auth helpers shared between register.html and login.html
- * Stores users in localStorage under the key "taskflow_users"
- * Stores the logged-in user under "taskflow_session"
+ * app.js — Auth helpers shared between register.html, login.html and tasks.html
+ * Uses the backend API for auth and preserves JWT in localStorage.
  */
 
 const Auth = (() => {
-  const USERS_KEY = 'taskflow_users';
+  const API_BASE = 'http://localhost:3000/api';
   const SESSION_KEY = 'taskflow_session';
-
-  /* ── helpers ── */
-
-  function getUsers() {
-    return JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
-  }
-
-  function saveUsers(users) {
-    localStorage.setItem(USERS_KEY, JSON.stringify(users));
-  }
 
   function validateEmail(email) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -27,73 +16,132 @@ const Auth = (() => {
     if (len === 0) return { width: '0%', color: '#ccc', label: 'Força da senha' };
 
     let score = 0;
-    if (len >= 8)  score++;
+    if (len >= 8) score++;
     if (len >= 12) score++;
     if (/[A-Z]/.test(password)) score++;
     if (/[0-9]/.test(password)) score++;
     if (/[^A-Za-z0-9]/.test(password)) score++;
 
-    if (score <= 1) return { width: '25%',  color: '#e74c3c', label: 'Muito fraca' };
-    if (score === 2) return { width: '50%',  color: '#e67e22', label: 'Fraca' };
-    if (score === 3) return { width: '75%',  color: '#f1c40f', label: 'Boa' };
-    return              { width: '100%', color: '#27ae60', label: 'Forte' };
+    if (score <= 1) return { width: '25%', color: '#e74c3c', label: 'Muito fraca' };
+    if (score === 2) return { width: '50%', color: '#e67e22', label: 'Fraca' };
+    if (score === 3) return { width: '75%', color: '#f1c40f', label: 'Boa' };
+    return { width: '100%', color: '#27ae60', label: 'Forte' };
   }
-
-  /* ── register ── */
-
-  function register(name, email, password) {
-    const users = getUsers();
-    const exists = users.some(u => u.email === email);
-    if (exists) {
-      return { success: false, message: 'Este e-mail já está cadastrado.' };
-    }
-    users.push({ name, email, password });
-    saveUsers(users);
-    return { success: true };
-  }
-
-  /* ── login ── */
-
-  function login(email, password) {
-    const users = getUsers();
-    const user = users.find(u => u.email === email && u.password === password);
-    if (!user) {
-      return { success: false, message: 'E-mail ou senha incorretos.' };
-    }
-    localStorage.setItem(SESSION_KEY, JSON.stringify({ name: user.name, email: user.email }));
-    return { success: true, user };
-  }
-
-  /* ── session ── */
 
   function getSession() {
     return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
   }
 
-  function logout() {
+  function setSession(user, token) {
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ user, token }));
+  }
+
+  function clearSession() {
     localStorage.removeItem(SESSION_KEY);
+  }
+
+  async function request(path, options = {}) {
+    const url = `${API_BASE}${path}`;
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    };
+
+    const init = {
+      ...options,
+      headers,
+    };
+
+    if (options.body) {
+      init.body = JSON.stringify(options.body);
+    }
+
+    let response;
+    try {
+      response = await fetch(url, init);
+    } catch (err) {
+      throw new Error('Não foi possível conectar ao servidor.');
+    }
+
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch (_) {
+      payload = null;
+    }
+
+    if (!response.ok) {
+      const message = payload?.message || `Erro ${response.status}`;
+      throw new Error(message);
+    }
+
+    return payload;
+  }
+
+  async function register(name, email, password) {
+    try {
+      const data = await request('/auth/register', {
+        method: 'POST',
+        body: { name, email, password },
+      });
+      return { success: data.success, message: data.message, data: data.data };
+    } catch (err) {
+      return { success: false, message: err.message };
+    }
+  }
+
+  async function login(email, password) {
+    try {
+      const data = await request('/auth/login', {
+        method: 'POST',
+        body: { email, password },
+      });
+      if (data.success && data.data) {
+        setSession(data.data.user, data.data.token);
+      }
+      return { success: data.success, message: data.message, data: data.data };
+    } catch (err) {
+      return { success: false, message: err.message };
+    }
+  }
+
+  function logout() {
+    clearSession();
     window.location.href = 'login.html';
   }
 
-  /* ── redirects ── */
-
-  /** On auth pages (login/register): redirect away if already logged in */
   function redirectIfLoggedIn() {
     if (getSession()) {
       window.location.href = 'tasks.html';
     }
   }
 
-  /** On protected pages (tasks): redirect to login if NOT logged in */
   function requireLogin() {
-    if (!getSession()) {
+    const session = getSession();
+    if (!session || !session.token) {
       window.location.href = 'login.html';
+      return false;
     }
+    return true;
   }
 
-  /* ── UI helpers ── */
+  function getAuthHeaders() {
+    const session = getSession();
+    return session?.token ? { Authorization: `Bearer ${session.token}` } : {};
+  }
+
+  async function fetchWithAuth(path, options = {}) {
+    return request(path, {
+      ...options,
+      headers: {
+        ...(options.headers || {}),
+        ...getAuthHeaders(),
+      },
+    });
+  }
 
   function showToast(toastEl, message, duration = 3000) {
+    if (!toastEl) return;
     toastEl.textContent = message;
     toastEl.classList.add('show');
     setTimeout(() => toastEl.classList.remove('show'), duration);
@@ -121,7 +169,10 @@ const Auth = (() => {
     getSession,
     redirectIfLoggedIn,
     requireLogin,
+    fetchWithAuth,
     showToast,
     setupPasswordToggles,
   };
 })();
+
+window.Auth = Auth;

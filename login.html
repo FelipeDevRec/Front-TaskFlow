@@ -210,7 +210,11 @@
 
   <div class="toast" id="toast"></div>
 
+  <script src="app.js"></script>
   <script>
+    Auth.redirectIfLoggedIn();
+    Auth.setupPasswordToggles();
+
     const form = document.getElementById('loginForm');
     const emailInput = document.getElementById('email');
     const passwordInput = document.getElementById('password');
@@ -235,33 +239,45 @@
       setTimeout(() => toast.classList.remove('show'), 3000);
     }
 
-    function validateEmail(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
-
-    form.addEventListener('submit', (e) => {
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      let valid = true;
 
       emailError.style.display = 'none';
       passwordError.style.display = 'none';
       emailInput.classList.remove('error');
       passwordInput.classList.remove('error');
 
-      if (!validateEmail(emailInput.value.trim())) {
+      const email = emailInput.value.trim().toLowerCase();
+      const password = passwordInput.value.trim();
+
+      let valid = true;
+      if (!Auth.validateEmail(email)) {
         emailError.style.display = 'block';
         emailInput.classList.add('error');
         valid = false;
       }
-      if (!passwordInput.value.trim()) {
+      if (!password) {
         passwordError.style.display = 'block';
         passwordInput.classList.add('error');
         valid = false;
       }
+      if (!valid) return;
 
-      if (valid) {
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Entrando...';
-        setTimeout(() => { window.location.href = 'index.html'; }, 1200);
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Entrando...';
+
+      const result = await Auth.login(email, password);
+
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Entrar';
+
+      if (!result.success) {
+        showToast(result.message || 'Falha ao fazer login.');
+        return;
       }
+
+      showToast(result.message || 'Login realizado com sucesso.');
+      setTimeout(() => { window.location.href = 'tasks.html'; }, 700);
     });
   </script>
 </body>
