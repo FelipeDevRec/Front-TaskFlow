@@ -6,7 +6,7 @@ require("dotenv").config();
  */
 
 const Auth = (() => {
-  const API_BASE = process.env.API;
+  const API_BASE = process.env.API || 'back-end-taskflow.vercel.app/api';
   const SESSION_KEY = 'taskflow_session';
 
   function validateEmail(email) {
