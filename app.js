@@ -4,7 +4,7 @@
  */
 
 const Auth = (() => {
-  const API_BASE = 'back-end-taskflow.vercel.app/api';
+  const API_BASE = 'https://back-end-taskflow.vercel.app/api';
   const SESSION_KEY = 'taskflow_session';
 
   function validateEmail(email) {
