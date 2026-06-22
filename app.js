@@ -1,12 +1,10 @@
-require("dotenv").config();
-
 /**
  * app.js — Auth helpers shared between register.html, login.html and tasks.html
  * Uses the backend API for auth and preserves JWT in localStorage.
  */
 
 const Auth = (() => {
-  const API_BASE = process.env.API || 'back-end-taskflow.vercel.app/api';
+  const API_BASE = 'back-end-taskflow.vercel.app/api';
   const SESSION_KEY = 'taskflow_session';
 
   function validateEmail(email) {
